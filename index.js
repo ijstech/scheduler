@@ -1,6 +1,8 @@
 const CronParser = require('cron-parser');
 const Uuid = require('uuid');
 const Vm = require('@ijstech/vm');
+const Module = require('@ijstech/module');
+const Log = require('@ijstech/log');
 const Url = require('url');
 const https = require('https');
 const http = require('http');
@@ -77,7 +79,7 @@ async function getModuleCode(config, moduleId){
             return result.code
     }
     catch(err){        
-        console.dir(err)
+        Log.error(err);
         return;
     }
 }
@@ -98,18 +100,18 @@ async function getModuleScript(config, moduleId){
         }
     }
     catch(err){        
-        console.dir(err);
+        Log.error(err);
         return;
     }
 }
 
-function runJob(job, module, script){        
+function runJob(job, script){        
     return new Promise(async function(resolve){        
         let vm = new Vm({
             org: job.org,
             logging: true,
-            script: script,
-            plugins: module.require || [],
+            script: script.script,
+            plugins: script.module.require || [],
             database: job.db,
             dbConfig: Options.db
         });
@@ -120,6 +122,7 @@ function runJob(job, module, script){
                 })`)
         }
         catch(err){            
+            Log.error(err);
         }
         finally{
             vm.destroy();
@@ -131,13 +134,17 @@ function getModule(job){
     let modulePath = job.module;    
     if (modulePath[0] != '/')
         modulePath = '/' + modulePath;
-    let module = ModuleIdx[(job.package + modulePath).toLowerCase()]    
+    let module = ModuleIdx[(job.package.id + modulePath).toLowerCase()]    
     return module;
 }
-async function getJobScript(module){    
-    let id = module.id;  
-    module.require = module.require || [];  
-    let result = await getModuleScript(UpdateServerConfig, id);        
+async function getJobScript(job){
+    let module = getModule(job);    
+    if (!module)    
+        return;
+    module.require = module.require || [];    
+    let result = await Module.getModuleScript(job.package, module);    
+    if (!result)
+        return;
     if (module.require.indexOf('@ijstech/pdm') < 0 && Array.isArray(result.require)){
         for (let i = 0; i < result.require.length; i ++){
             let item = result.require[i].toLowerCase();
@@ -147,28 +154,26 @@ async function getJobScript(module){
             }
         }
     }
-    return result.script;
+    return {
+        module: module,
+        script: result.script
+    };
 }
 function processJobs(){    
-    return new Promise(async function(resolve){
-        console.clear()
-        console.log('##Pending jobs:')
+    return new Promise(async function(resolve){                
         for (let i = 0; i < Jobs.length; i ++){            
             let job = Jobs[i];
-            let now = new Date();       
-            console.log(job.module +  ' ' + ((job.next.getTime() - now.getTime()) / 1000));
-            if (now.getTime() >= job.next.getTime()){                                
-                try{                         
-                    let module = getModule(job);
-                    if (!module)
-                        return resolve();                
-                    let script = await getJobScript(module);
-                    console.log('Running ...')                    
-                    await runJob(job, module, script);
+            let now = new Date();            
+            if (job.active && now.getTime() >= job.next.getTime()){
+                try{                                 
+                    let script = await getJobScript(job);                    
+                    if (!script)
+                        return resolve();
+                    await runJob(job, script);
                     job.next = CronParser.parseExpression(job.cron).next();
                 }
                 catch(err){                    
-                    console.dir(err)
+                    Log.error(err);
                 }                                
             }                   
         }
@@ -179,41 +184,40 @@ async function start(){
     try{
         await processJobs();
     }
-    catch(err){}    
+    catch(err){
+        Log.error(err);
+    }    
     clearTimeout(ProcessJobTimer);
     ProcessJobTimer = null;
     ProcessJobTimer = setTimeout(start, 500);
 }
 module.exports = {
-    init: async function(options){              
+    _init: async function(options){             
         if (options.jobs){          
-            Options = options;      
-            UpdateServerConfig = options.updateServer;
+            Options = options;                  
+            Jobs = [];
             let package = {}
             for (let p in options.package){
                 try{
-                    let pack = options.package[p];
-                    if (pack.liveUpdate){
-                        let code = await getModuleCode(UpdateServerConfig, pack.id)
-                        let packData = JSON.parse(code);
-                        for (let m in packData.modules){
-                            let module = packData.modules[m];                        
-                            let path = p.toLowerCase();
-                            if (m[0] == '/')          
-                                path = path + m.toLowerCase()
-                            else
-                                path = path + '/' + m.toLowerCase()
-                            if (typeof(module) == 'string'){
-                                module = {
-                                    id: module
-                                }
+                    let pack = options.package[p];                    
+                    let packData = await Module.getPackage(p, pack)                    
+                    for (let m in packData.modules){
+                        let module = packData.modules[m];                        
+                        let path = pack.id;
+                        if (m[0] == '/')          
+                            path = path + m.toLowerCase()
+                        else
+                            path = path + '/' + m.toLowerCase()
+                        if (typeof(module) == 'string'){
+                            module = {
+                                id: module
                             }
-                            ModuleIdx[path] = module;
                         }
+                        ModuleIdx[path] = module;
                     }
                 }
                 catch(err){
-                    console.dir(err)
+                    Log.error(err);
                 }            
             }
             for (let i = 0; i < options.jobs.length; i ++){            
@@ -223,11 +227,16 @@ module.exports = {
                     org: typeof(job.org)=='string'?options.org[job.org]:job.org,
                     cron: job.cron,
                     db: job.db,
-                    package: job.package,
+                    active: job.active==false?false:true,
+                    package: {
+                        name: job.package,
+                        id: options.package[job.package].id,
+                        liveUpdate: options.package[job.package].liveUpdate
+                    },
                     module: job.module,
                     next: CronParser.parseExpression(job.cron).next()
                 })       
-            }
+            }            
             start();
         }    
     }
