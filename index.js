@@ -1,5 +1,4 @@
 const CronParser = require('cron-parser');
-const Uuid = require('uuid');
 const Vm = require('@ijstech/vm');
 const Module = require('@ijstech/module');
 const Log = require('@ijstech/log');
@@ -11,6 +10,7 @@ var Jobs = [];
 var Options; 
 var ProcessJobTimer;
 var ModuleIdx = {};
+var PackageIdx = {};
 var UpdateServerConfig; 
 function getScript(module){    
     let result = '';    
@@ -133,16 +133,24 @@ function runJob(job, script){
 function getModule(job){
     let modulePath = job.module;    
     if (modulePath[0] != '/')
-        modulePath = '/' + modulePath;
-    let module = ModuleIdx[(job.package.id + modulePath).toLowerCase()]    
+        modulePath = '/' + modulePath;    
+    let module = ModuleIdx[(job.package.id + modulePath).toLowerCase()]     
     return module;
 }
 async function getJobScript(job){
-    let module = getModule(job);    
-    if (!module)    
-        return;
-    module.require = module.require || [];    
-    let result = await Module.getModuleScript(job.package, module);    
+    let module;
+    if (job.package){
+        module = getModule(job);            
+        if (!module)    
+            return;
+    }
+    else
+        module = {
+            file: job.module
+        }
+    
+    module.require = module.require || [];   
+    let result = await Module.getModuleScript(job.package, module);  
     if (!result)
         return;
     if (module.require.indexOf('@ijstech/pdm') < 0 && Array.isArray(result.require)){
@@ -159,14 +167,14 @@ async function getJobScript(job){
         script: result.script
     };
 }
-function processJobs(){    
+function processJobs(){        
     return new Promise(async function(resolve){                
         for (let i = 0; i < Jobs.length; i ++){            
             let job = Jobs[i];
-            let now = new Date();            
+            let now = new Date();                        
             if (job.active && now.getTime() >= job.next.getTime()){
                 try{                                 
-                    let script = await getJobScript(job);                    
+                    let script = await getJobScript(job);
                     if (!script)
                         return resolve();
                     await runJob(job, script);
@@ -180,11 +188,11 @@ function processJobs(){
         resolve();
     })
 }
-async function start(){       
+async function start(){    
     try{
         await processJobs();
     }
-    catch(err){
+    catch(err){        
         Log.error(err);
     }    
     clearTimeout(ProcessJobTimer);
@@ -197,10 +205,12 @@ module.exports = {
             Options = options;                  
             Jobs = [];
             let package = {}
+            PackageIdx = {};
+            ModuleIdx = {};
             for (let p in options.package){
                 try{
                     let pack = options.package[p];                    
-                    let packData = await Module.getPackage(p, pack)                    
+                    let packData = await Module.getPackage(p, pack)                        
                     for (let m in packData.modules){
                         let module = packData.modules[m];                        
                         let path = pack.id;
@@ -214,7 +224,7 @@ module.exports = {
                             }
                         }
                         ModuleIdx[path] = module;
-                    }
+                    }                    
                 }
                 catch(err){
                     Log.error(err);
@@ -223,20 +233,19 @@ module.exports = {
             for (let i = 0; i < options.jobs.length; i ++){            
                 let job = options.jobs[i];
                 Jobs.push({
-                    uid: Uuid.v4(),                
                     org: typeof(job.org)=='string'?options.org[job.org]:job.org,
                     cron: job.cron,
                     db: job.db,
                     active: job.active==false?false:true,
-                    package: {
-                        name: job.package,
-                        id: options.package[job.package].id,
-                        liveUpdate: options.package[job.package].liveUpdate
-                    },
+                    package: job.package?{
+                        name: typeof(job.package)=='object'?job.package.name:job.package,
+                        id: typeof(job.package)=='object'?job.package.id:options.package&&options.package[job.package]?options.package[job.package].id:job.package,
+                        liveUpdate: typeof(job.package)=='object'?job.package.liveUpdate:options.package&&options.package[job.package]?options.package[job.package].liveUpdate:false
+                    }:null,
                     module: job.module,
                     next: CronParser.parseExpression(job.cron).next()
                 })       
-            }            
+            }
             start();
         }    
     }

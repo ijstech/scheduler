@@ -1,0 +1,6 @@
+{
+    "name": "@ijstech/scheduler.example",
+    "dependencies": {
+        "@ijstech/scheduler": "../"
+    }
+}
