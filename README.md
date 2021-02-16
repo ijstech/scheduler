@@ -1,2 +1,2 @@
 # @ijstech/scheduler
-Scheduler plugin for [Secure Application Server](https://github.com/ijstech/node)
+Scheduler plugin for [IJS Secure Node Server](https://github.com/ijstech/node)
