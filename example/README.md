@@ -1,6 +1,6 @@
 # Basic example
 
-A basic sample that illustrate how to use @ijstech/scheduler plugin
+A basic sample that illustrates how to use @ijstech/scheduler plugin
 
 ## Running the example
 
