@@ -133,14 +133,14 @@ function runJob(job, script){
 function getModule(job){
     let modulePath = job.module;    
     if (modulePath[0] != '/')
-        modulePath = '/' + modulePath;    
+        modulePath = '/' + modulePath;
     let module = ModuleIdx[(job.package.id + modulePath).toLowerCase()]     
     return module;
 }
 async function getJobScript(job){
     let module;
     if (job.package){
-        module = getModule(job);            
+        module = getModule(job);
         if (!module)    
             return;
     }
@@ -173,6 +173,8 @@ function processJobs(){
             let job = Jobs[i];
             let now = new Date();                        
             if (job.active && now.getTime() >= job.next.getTime()){
+                let d1 = new Date();
+                console.dir(`${new Date().toLocaleString()} ${job.module}`)
                 try{                                 
                     let script = await getJobScript(job);
                     if (!script)
@@ -182,7 +184,11 @@ function processJobs(){
                 }
                 catch(err){                    
                     Log.error(err);
-                }                                
+                }
+                finally{
+                    let d2 = new Date();
+                    console.dir(`Processing time: ${(Math.round(d2.getTime() - d1.getTime()) / 1000)} seconds`)
+                }
             }                   
         }
         resolve();
@@ -247,6 +253,7 @@ module.exports = {
                 })       
             }
             start();
+            console.dir('Scheduler enabled')
         }    
     }
 }
