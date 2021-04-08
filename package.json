@@ -1,6 +1,6 @@
 {
     "name": "@ijstech/scheduler",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Scheduler plugin",
     "author": "https://ijs.network",
     "license": "MIT",
@@ -8,7 +8,7 @@
         "cron-parser": "3.0.0",
         "@ijstech/log": "^0.1.0",
         "@ijstech/module": "^0.1.2",
-        "@ijstech/vm": "^0.1.0"
+        "@ijstech/vm": "^0.1.2"
     },
     "repository": {
         "type": "git",
