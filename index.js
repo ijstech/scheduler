@@ -105,8 +105,8 @@ async function getModuleScript(config, moduleId){
     }
 }
 
-function runJob(job, script){        
-    return new Promise(async function(resolve){        
+function runJob(job, script){    
+    return new Promise(async function(resolve){
         let vm = new Vm({
             org: job.org,
             logging: true,
@@ -115,10 +115,14 @@ function runJob(job, script){
             database: job.db,
             dbConfig: Options.db
         });
-        try{
+        try{            
+            if (job.params)
+                vm.injectGlobalObject('_params', JSON.parse(JSON.stringify(job.params)));
+            else
+                vm.injectGlobalObject('_params', {});
             await vm.eval(`
                 (async function _untrusted() {
-                    var result = await handleRequest()
+                    var result = await handleRequest(null, null, null, _params)
                 })`)
         }
         catch(err){            
@@ -150,7 +154,7 @@ async function getJobScript(job){
         }
     
     module.require = module.require || [];   
-    let result = await Module.getModuleScript(job.package, module);  
+    let result = await Module.getModuleScript(job.package, module);      
     if (!result)
         return;
     if (module.require.indexOf('@ijstech/pdm') < 0 && Array.isArray(result.require)){
@@ -243,6 +247,7 @@ module.exports = {
                     cron: job.cron,
                     db: job.db,
                     active: job.active==false?false:true,
+                    params: job.params,
                     package: job.package?{
                         name: typeof(job.package)=='object'?job.package.name:job.package,
                         id: typeof(job.package)=='object'?job.package.id:options.package&&options.package[job.package]?options.package[job.package].id:job.package,
