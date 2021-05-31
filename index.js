@@ -137,7 +137,7 @@ function runJob(job, script){
 function getModule(job){
     let modulePath = job.module;    
     if (modulePath[0] != '/')
-        modulePath = '/' + modulePath;
+        modulePath = '/' + modulePath;    
     let module = ModuleIdx[(job.package.id + modulePath).toLowerCase()]     
     return module;
 }
