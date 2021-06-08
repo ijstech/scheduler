@@ -7,7 +7,7 @@
     "dependencies": {
         "cron-parser": "3.0.0",
         "@ijstech/log": "^0.1.0",
-        "@ijstech/module": "^0.1.7",
+        "@ijstech/module": "^0.1.8",
         "@ijstech/vm": "^0.1.5"
     },
     "repository": {
